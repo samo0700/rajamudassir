@@ -52,6 +52,11 @@ export type Consultation = {
   preferred_time: string;
   message: string;
   preferred_contact_method: string;
+  whatsapp_opt_in?: boolean;
+  whatsapp_opt_in_at?: string | null;
+  appointment_date?: string | null;
+  appointment_time?: string | null;
+  appointment_location?: string | null;
   status: "Pending" | "Confirmed" | "Completed" | "Cancelled";
   admin_whatsapp_status?: "pending" | "sent" | "failed" | "not_configured";
   client_whatsapp_status?: "pending" | "sent" | "failed" | "not_configured" | "not_requested";
