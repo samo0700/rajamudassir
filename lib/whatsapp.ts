@@ -1,5 +1,7 @@
 import "server-only";
 import { firm } from "@/lib/firm";
+import { normalizePakistaniPhoneNumber } from "@/lib/phone";
+export { normalizePakistaniPhoneNumber } from "@/lib/phone";
 
 export type WhatsAppNotificationStatus = "sent" | "failed" | "not_configured";
 export type WhatsAppNotificationResult = { status: WhatsAppNotificationStatus };
@@ -24,32 +26,26 @@ type BookingNotice = {
 
 type ClientNotice = Pick<BookingNotice, "booking_reference" | "preferred_date" | "preferred_time"> & {
   phone: string;
+  preferred_contact_method?: string;
+  appointment_date?: string | null;
+  appointment_time?: string | null;
+  appointment_location?: string | null;
 };
 
-/** Return a WhatsApp Cloud API recipient in digits-only international format. */
-export function normalizePakistaniPhoneNumber(value: string): string | null {
-  const input = value.trim();
-  let digits = input.replace(/\D/g, "");
+export function clientHasWhatsAppConsent(booking: { whatsapp_opt_in?: boolean; preferred_contact_method: string }): boolean {
+  return booking.whatsapp_opt_in ?? booking.preferred_contact_method === "WhatsApp";
+}
 
-  if (digits.startsWith("0092")) {
-    digits = `92${digits.slice(4)}`;
-  } else if (digits.startsWith("92")) {
-    // Already in Pakistan's international format.
-  } else if (digits.startsWith("0")) {
-    const national = digits.slice(1);
-    if (national.length !== 10 || !national.startsWith("3")) return null;
-    digits = `92${national}`;
-  } else if (digits.length === 10 && digits.startsWith("3")) {
-    digits = `92${digits}`;
-  } else if (input.startsWith("+") && digits.length >= 8 && digits.length <= 15) {
-    // Preserve other explicit E.164 numbers as-is.
-  } else {
-    return null;
-  }
-
-  if (digits.startsWith("92") && digits.length === 12 && digits[2] === "3") return digits;
-  if (input.startsWith("+") && digits.length >= 8 && digits.length <= 15) return digits;
-  return null;
+function clientAppointmentDetails(booking: ClientNotice): string[] {
+  const method = booking.preferred_contact_method || "Office Visit";
+  const venue = method === "Phone Consultation" || method === "Phone"
+    ? "Our office will call your booking phone number."
+    : booking.appointment_location?.trim() || (method === "Office Visit" ? `${firm.address}, ${firm.city}` : "Please contact our office for meeting details.");
+  return [
+    booking.appointment_date || booking.preferred_date,
+    booking.appointment_time ? `${booking.appointment_time.slice(0, 5)} PKT` : booking.preferred_time,
+    `${firm.websiteName} (${firm.firmName}). ${method}. ${venue}`
+  ];
 }
 
 function templateFromEnvironment(variable: string, parameters: string[]): WhatsAppTemplate | undefined {
@@ -170,9 +166,7 @@ export function sendClientConfirmation(booking: ClientNotice): Promise<WhatsAppN
   return sendConfiguredTemplate(booking.phone, "WHATSAPP_TEMPLATE_CLIENT_CONFIRMATION", [
     booking.booking_reference,
     "Confirmed",
-    booking.preferred_date,
-    booking.preferred_time,
-    `${firm.websiteName} (${firm.firmName})`
+    ...clientAppointmentDetails(booking)
   ]);
 }
 
@@ -180,9 +174,7 @@ export function sendClientCancellation(booking: ClientNotice): Promise<WhatsAppN
   return sendConfiguredTemplate(booking.phone, "WHATSAPP_TEMPLATE_CLIENT_CANCELLATION", [
     booking.booking_reference,
     "Cancelled",
-    booking.preferred_date,
-    booking.preferred_time,
-    `${firm.websiteName} (${firm.firmName})`
+    ...clientAppointmentDetails(booking)
   ]);
 }
 

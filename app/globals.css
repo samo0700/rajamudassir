@@ -177,6 +177,9 @@ button { color: inherit; }
 .form-grid textarea, .admin-form textarea { min-height: 118px; resize: vertical; }
 .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus, .admin-form input:focus, .admin-form select:focus, .admin-form textarea:focus { border-color: #aa8b4c; outline: none; box-shadow: 0 0 0 2px rgba(184,154,90,.16); }
 .field-full { grid-column: 1 / -1; }
+.form-grid .whatsapp-consent { display: flex; align-items: flex-start; gap: 10px; font-weight: 400; line-height: 1.6; letter-spacing: 0; }
+.form-grid .whatsapp-consent input { width: 16px; min-width: 16px; min-height: 16px; height: 16px; margin-top: 3px; accent-color: var(--gold); }
+.whatsapp-consent small { display: block; margin-top: 4px; color: var(--muted); }
 .file-input-wrap { min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px dashed #c9c7be; color: #77776e; }
 .file-input-wrap input { min-width: 0; min-height: auto; padding: 0; border: 0; font-size: 10px; }
 .file-input-wrap small { flex: 0 0 auto; color: #8c8c83; font-size: 9px; font-weight: 400; }
@@ -278,6 +281,12 @@ button { color: inherit; }
 .admin-form .check-field { display: flex; align-items: center; gap: 9px; min-height: 42px; }
 .admin-form .check-field input { width: 16px; min-height: 16px; }
 .admin-form .button { justify-self: start; }
+.notification-state { display: block; margin-top: 5px; color: var(--muted); }
+.notification-actions { margin-top: 10px; }
+.appointment-details { display: grid; gap: 8px; min-width: 180px; padding: 10px 0; }
+.appointment-details label { display: grid; gap: 4px; font-size: 11px; }
+.appointment-details input { width: 100%; padding: 7px; border: 1px solid var(--line); background: var(--white); }
+.appointment-details .small-action { justify-self: start; }
 .admin-table-wrap { overflow-x: auto; }
 .admin-table { width: 100%; border-collapse: collapse; text-align: left; }
 .admin-table th { padding: 10px 9px; color: #85867e; font-size: 9px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }

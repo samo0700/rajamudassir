@@ -21,7 +21,7 @@ Open `http://localhost:3000`. Public pages can render using careful placeholders
 1. Create a Supabase project.
 2. Copy the project URL and publishable key into `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `.env.local`.
 3. Copy the service role key into `SUPABASE_SERVICE_ROLE_KEY`. This is a server-only secret and must never use a `NEXT_PUBLIC_` prefix.
-4. Apply all SQL files in `supabase/migrations/` in timestamp order in the Supabase SQL Editor or with the Supabase CLI. The initial migration creates the tables, policies, starter services, and storage buckets; the WhatsApp migration adds notification status fields, and the consultation-method migration enables the three current booking options. Apply the consultation-method migration before serving the updated form.
+4. Apply all SQL files in `supabase/migrations/` in timestamp order in the Supabase SQL Editor or with the Supabase CLI. The latest `202610070001_whatsapp_consultation_updates.sql` migration adds independent WhatsApp consent, agreed appointment details, and the admin-only permission to create bookings. Apply it before serving the updated form.
 5. In Supabase Authentication settings, disable public sign-ups. Create the administrator account from the Supabase Dashboard (Authentication → Users → Add user), with a secure password.
 6. Copy that user's UUID and add it to `public.admin_users` in the SQL Editor:
 
@@ -62,16 +62,22 @@ The service role key bypasses Supabase RLS by design. It is used only in server 
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Optional | Reserved for future Cloudflare Turnstile verification |
 | `TURNSTILE_SECRET_KEY` | Optional | Reserved for future Cloudflare Turnstile verification |
 
-WhatsApp credentials and template names are server-only. New consultation requests offer Office Visit (default), Phone Consultation, and Meeting at Another Location. The office confirms any proposed external venue. These choices do not opt the client in to WhatsApp updates. Existing requests that explicitly selected WhatsApp retain their original consent; only those requests are eligible for automated client WhatsApp updates. Legacy Phone, WhatsApp, and Email values remain accepted for older requests and cached forms. Consultation booking and client status notifications use approved templates; if a required template or Meta credential is missing, the notification is marked not configured while the booking/status update remains saved. Contact alerts also use a template when configured. The admin dashboard records whether each notification was accepted, failed, not configured, or not requested. “Sent” means Meta accepted the API request; delivery/read receipts require a configured webhook.
+WhatsApp credentials and template names are server-only. A new public booking alerts the office number in `ADMIN_WHATSAPP`. Office Visit, Phone Consultation, and Meeting at Another Location remain the consultation options. Clients can separately opt in to WhatsApp appointment updates using the unchecked consent checkbox. Confirmation, cancellation, and changes to an agreed appointment notify consenting clients at their booking phone number. Lawyers can also use **Consultations → Book consultation** to create a confirmed appointment for a client, recording consent if the client agreed. Confirmations require an agreed date and exact time in Pakistan time; meetings at another location also require the venue.
+
+The migration preserves existing explicit WhatsApp preferences as consent. An explicit opt-out overrides that legacy preference. Missing credentials/templates or a rejected message never undo a saved booking. Failed or not-configured notifications have an explicit retry action; duplicate confirmations, notes-only saves, and concurrent retry attempts do not send repeated messages. Use **Stop WhatsApp updates** when the client withdraws consent. The dashboard reports API acceptance, failure, setup required, or no consent. “Accepted by WhatsApp” means Meta accepted the API request; this is not a delivery/read receipt.
 
 Create and approve templates in WhatsApp Manager before enabling automated notifications. Suggested body text and variables:
 
 - Admin booking: `New consultation booking. Reference: {{1}}. Client: {{2}}. Phone: {{3}}. Email: {{4}}. Case category: {{5}}. Preferred date: {{6}}. Preferred time: {{7}}. Preferred contact: {{8}}. Summary: {{9}}.` Variables: reference, client name, client phone, email, case category, date, time, preferred contact method, case summary.
-- Client confirmation: `Your consultation is confirmed. Reference: {{1}}. Status: {{2}}. Date: {{3}}. Time: {{4}}. {{5}}.` Variables: reference, status, date, time, firm name.
-- Client cancellation: `We’re sorry, but your consultation request has been cancelled. Reference: {{1}}. Status: {{2}}. Requested date: {{3}}. Requested time: {{4}}. {{5}}.` Variables: reference, status, date, time, firm name.
+- Client confirmation: `Your consultation is confirmed. Reference: {{1}}. Status: {{2}}. Date: {{3}}. Time: {{4}}. Details: {{5}}.` Variables: reference, status, agreed date, exact time in PKT, firm / consultation method / venue. Five parameters are retained for existing templates.
+- Client cancellation: `Your consultation has been cancelled. Reference: {{1}}. Status: {{2}}. Date: {{3}}. Time: {{4}}. Details: {{5}}.` Variables: reference, status, agreed date (or requested date for an unconfirmed request), time, firm / consultation method / venue.
 - Contact alert (optional): `New website inquiry: {{1}}.` Variable: the inquiry details text.
 
 Match template names, language code, and placeholder count exactly to the approved templates in Meta WhatsApp Manager.
+
+For activation, create/connect a Meta WhatsApp Business account and sender number, approve the templates, then set the server-only variables in `.env.local` and Vercel's project environment. Copy the Graph API version from Meta's API Setup page rather than assuming the example version is current. Restart the local server after changing credentials; redeploy Vercel after setting production variables. The sender Phone Number ID is Meta's identifier, not the office recipient phone number. Website integration does not register a business number or create Meta credentials automatically.
+
+Run offline WhatsApp checks with `npm run test:whatsapp` using Node 22 or newer. Tests mock all database and messaging operations, load no environment file, and send no real messages. After account setup, verify one genuine booking and confirmation with a consenting test recipient before enabling production notifications. Official reference: [WhatsApp Business Messaging Policy](https://business.whatsapp.com/policy).
 
 ## Running and deployment
 
@@ -87,7 +93,7 @@ For Vercel, import the repository, set the environment variables in Project Sett
 
 - **Counsel profile**: edit the legacy individual counsel's name, title, experience, biography, association, photo, email, and phone.
 - **Services**: create, edit, publish, feature, order, and remove dynamic service pages. Service images accept JPG, PNG, and WebP up to 4 MB.
-- **Consultations**: view the selected consultation method, booking details and uploaded documents, edit internal notes, and change Pending, Confirmed, Completed, or Cancelled status. Confirmation and cancellation trigger WhatsApp notifications when configured.
+- **Consultations**: view requests and documents, create a booking, agree the date/time/venue, confirm or cancel appointments, save notes, retry failed notifications, and stop a client's WhatsApp updates. Only the office/lawyer destination in `ADMIN_WHATSAPP` receives new public-booking alerts.
 - **Office & settings**: update the phone, WhatsApp, exact address, office hours, Google Maps URL/coordinates, social links, and footer text.
 - **Messages**: view contact form submissions and mark them read or unread.
 

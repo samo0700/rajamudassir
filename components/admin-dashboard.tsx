@@ -9,6 +9,8 @@ import { defaultProfile, defaultSettings } from "@/lib/defaults";
 import type { Consultation, ContactMessage, Profile, Service, SiteSettings } from "@/lib/types";
 import { firm } from "@/lib/firm";
 import { isConsultationMethod } from "@/lib/consultation-methods";
+import { consultationMethods } from "@/lib/consultation-methods";
+import { todayInPakistan } from "@/lib/consultation-date";
 
 type Tab = "Overview" | "Consultations" | "Services" | "Counsel profile" | "Office & settings" | "Messages";
 type DataState = { profile: Profile; settings: SiteSettings; services: Service[]; consultations: Consultation[]; messages: ContactMessage[] };
@@ -41,6 +43,8 @@ export function AdminDashboard() {
   const [serviceImage, setServiceImage] = useState<File | null>(null);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [logoImage, setLogoImage] = useState<File | null>(null);
+  const [consultationFormOpen, setConsultationFormOpen] = useState(false);
+  const [consultationBusy, setConsultationBusy] = useState("");
 
   async function loadData() {
     setLoading(true); setError("");
@@ -115,17 +119,52 @@ export function AdminDashboard() {
     finally { setBusy(false); }
   }
 
-  async function updateConsultation(item: Consultation, status?: Consultation["status"]) {
-    setError(""); setNotice("");
+  function notificationNotice(result: { notification?: { status: string } | null }, label: string) {
+    if (result.notification?.status === "sent") setNotice(`${label}. WhatsApp was accepted by Meta.`);
+    else if (result.notification?.status === "not_configured") setNotice(`${label}. WhatsApp is waiting for account and template setup.`);
+    else if (result.notification?.status === "failed") setNotice(`${label}, but WhatsApp failed. You can retry the notification.`);
+    else if (result.notification?.status === "not_requested") setNotice(`${label}. The client did not opt in to WhatsApp updates.`);
+    else setNotice(label);
+  }
+
+  async function createConsultation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setConsultationBusy("new"); setError(""); setNotice("");
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form).entries());
     try {
-      const result = await api("/api/admin/consultations", "PATCH", { id: item.id, ...(status ? { status } : {}), internal_notes: item.internal_notes || "" });
-      if (result.notification?.status === "sent") setNotice(`${status || "Appointment status"} saved. WhatsApp was accepted by Meta.`);
-      else if (result.notification?.status === "not_configured") setNotice(`${status || "Appointment status"} saved. WhatsApp is not configured.`);
-      else if (result.notification?.status === "failed") setNotice(`${status || "Appointment status"} saved, but WhatsApp failed. Check server logs and template settings.`);
-      else if (result.notification?.status === "not_requested") setNotice(`${status || "Appointment status"} saved. The client did not opt in to WhatsApp updates.`);
-      else setNotice("Appointment updated.");
+      const result = await api("/api/admin/consultations", "POST", { ...values, whatsapp_opt_in: values.whatsapp_opt_in === "on", status: "Confirmed" });
+      setConsultationFormOpen(false); notificationNotice(result, `Consultation ${result.consultation.booking_reference} booked`); await loadData();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not create consultation."); }
+    finally { setConsultationBusy(""); }
+  }
+
+  async function updateConsultation(item: Consultation, status?: Consultation["status"]) {
+    setError(""); setNotice(""); setConsultationBusy(item.id);
+    try {
+      const result = await api("/api/admin/consultations", "PATCH", {
+        id: item.id, ...(status ? { status } : {}), internal_notes: item.internal_notes || "",
+        ...(status === "Confirmed" ? { appointment_date: item.appointment_date || "", appointment_time: item.appointment_time?.slice(0, 5) || "", appointment_location: item.appointment_location || "" } : {})
+      });
+      notificationNotice(result, `${status || "Appointment details"} saved`);
       await loadData();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not update appointment."); }
+    finally { setConsultationBusy(""); }
+  }
+
+  async function retryWhatsApp(item: Consultation, recipient: "admin" | "client") {
+    setError(""); setNotice(""); setConsultationBusy(item.id);
+    try {
+      const result = await api("/api/admin/consultations", "PATCH", { id: item.id, retry_whatsapp: recipient });
+      notificationNotice(result, "Notification retry completed"); await loadData();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not retry WhatsApp."); }
+    finally { setConsultationBusy(""); }
+  }
+
+  async function stopWhatsApp(item: Consultation) {
+    setError(""); setNotice(""); setConsultationBusy(item.id);
+    try { await api("/api/admin/consultations", "PATCH", { id: item.id, whatsapp_opt_in: false }); setNotice("WhatsApp updates stopped for this client."); await loadData(); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "Could not stop WhatsApp updates."); }
+    finally { setConsultationBusy(""); }
   }
 
   async function markMessage(message: ContactMessage) {
@@ -158,10 +197,27 @@ export function AdminDashboard() {
         {tab === "Overview" && <>
           <div className="admin-stat-grid"><div className="admin-stat"><span>Total requests</span><strong>{data.consultations.length}</strong></div><div className="admin-stat"><span>Pending</span><strong>{pending}</strong></div><div className="admin-stat"><span>Confirmed</span><strong>{confirmed}</strong></div><div className="admin-stat"><span>Completed</span><strong>{completed}</strong></div></div>
           <div className="admin-stat-grid"><div className="admin-stat"><span>Published services</span><strong>{data.services.filter((service) => service.published).length}</strong></div><div className="admin-stat"><span>Unread inquiries</span><strong>{unread}</strong></div><div className="admin-stat"><span>All services</span><strong>{data.services.length}</strong></div><div className="admin-stat"><span>Office</span><strong style={{ fontSize: 19 }}>{data.settings.city || "Lahore"}</strong></div></div>
-          <div className="admin-panel"><div className="admin-panel-heading"><h2>Recent consultation requests</h2><button className="small-action" onClick={() => setTab("Consultations")}>View all</button></div><ConsultationTable items={data.consultations.slice(0, 5)} update={updateConsultation} openDocument={openDocument} /></div>
+          <div className="admin-panel"><div className="admin-panel-heading"><h2>Recent consultation requests</h2><button className="small-action" onClick={() => setTab("Consultations")}>View all</button></div><ConsultationTable items={data.consultations.slice(0, 5)} update={updateConsultation} openDocument={openDocument} retry={retryWhatsApp} stopUpdates={stopWhatsApp} busyId={consultationBusy} /></div>
           <div className="admin-panel"><div className="admin-panel-heading"><h2>Recent inquiries</h2><button className="small-action" onClick={() => setTab("Messages")}>View messages</button></div><MessageList items={data.messages.slice(0, 4)} mark={markMessage} /></div>
         </>}
-        {tab === "Consultations" && <div className="admin-panel"><div className="admin-panel-heading"><h2>Consultation requests</h2><span className="status-pill pending">{pending} pending</span></div><ConsultationTable items={data.consultations} update={updateConsultation} openDocument={openDocument} /></div>}
+        {tab === "Consultations" && <div className="admin-panel"><div className="admin-panel-heading"><h2>Consultation requests</h2><button className="button button-dark" onClick={() => setConsultationFormOpen(!consultationFormOpen)}><Plus size={15} /> Book consultation</button></div>
+          {consultationFormOpen && <form className="admin-form" onSubmit={createConsultation} style={{ padding: "17px 0 23px", marginBottom: 18, borderBottom: "1px solid var(--line)" }}>
+            <h3 className="field-full">Book an appointment for a client</h3>
+            <label>Client name<input name="full_name" required minLength={2} maxLength={120} /></label>
+            <label>Phone number<input name="phone" required placeholder="+92 300 1234567" maxLength={32} /></label>
+            <label>Email address<input name="email" type="email" required maxLength={254} /></label>
+            <label>Case category<select name="case_category" required><option value="">Select a service</option>{data.services.filter((service) => service.published).map((service) => <option key={service.id}>{service.title}</option>)}<option>Not sure yet</option></select></label>
+            <label>Appointment date<input name="appointment_date" type="date" required min={todayInPakistan()} onChange={(event) => { const field = event.currentTarget.form?.elements.namedItem("preferred_date") as HTMLInputElement | null; if (field) field.value = event.target.value; }} /></label>
+            <label>Appointment time (Pakistan time)<input name="appointment_time" type="time" required /></label>
+            <input name="preferred_date" type="hidden" />
+            <input name="preferred_time" type="hidden" value="Flexible" />
+            <label>Consultation method<select name="preferred_contact_method">{consultationMethods.map((method) => <option key={method}>{method}</option>)}</select></label>
+            <label>Meeting location<input name="appointment_location" maxLength={300} placeholder="Office address or agreed external venue" /></label>
+            <label className="field-full">Short case summary<textarea name="message" maxLength={3000} rows={2} /></label>
+            <label className="check-field field-full"><input name="whatsapp_opt_in" type="checkbox" /> Client agreed to receive appointment updates on WhatsApp.</label>
+            <div className="field-full admin-actions"><button className="button button-primary" disabled={consultationBusy === "new"}>{consultationBusy === "new" ? <LoaderCircle className="spin" size={15} /> : <Save size={15} />} Book and notify client</button><button type="button" className="small-action" onClick={() => setConsultationFormOpen(false)}>Cancel</button></div>
+          </form>}
+          <ConsultationTable items={data.consultations} update={updateConsultation} openDocument={openDocument} retry={retryWhatsApp} stopUpdates={stopWhatsApp} busyId={consultationBusy} /></div>}
         {tab === "Services" && <div className="admin-panel"><div className="admin-panel-heading"><h2>Services</h2><button className="button button-dark" onClick={() => { setServiceDraft(blankService); setEditingService(""); setServiceImage(null); setServiceFormOpen(!serviceFormOpen); }}><Plus size={15} /> Add service</button></div>
           {serviceFormOpen && <form className="admin-form" onSubmit={saveService} style={{ padding: "17px 0 23px", marginBottom: 18, borderBottom: "1px solid var(--line)" }}>
             <h3 className="field-full" style={{ margin: 0, fontFamily: "var(--serif)", fontSize: 20, fontWeight: 400 }}>{editingService ? "Edit service" : "New service"}</h3>
@@ -205,9 +261,53 @@ export function AdminDashboard() {
 
 function slugify(value: string) { return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""); }
 
-function ConsultationTable({ items, update, openDocument }: { items: Consultation[]; update: (item: Consultation, status?: Consultation["status"]) => Promise<void>; openDocument: (id: string) => Promise<void> }) {
+type ConsultationTableProps = {
+  items: Consultation[];
+  update: (item: Consultation, status?: Consultation["status"]) => Promise<void>;
+  openDocument: (id: string) => Promise<void>;
+  retry: (item: Consultation, recipient: "admin" | "client") => Promise<void>;
+  stopUpdates: (item: Consultation) => Promise<void>;
+  busyId: string;
+};
+
+function ConsultationTable(props: ConsultationTableProps) {
+  const { items } = props;
   if (!items.length) return <div className="admin-empty">No consultation requests yet.</div>;
-  return <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Client / reference</th><th>Matter & requested time</th><th>Contact</th><th>Status</th><th>Files / actions</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td><strong>{item.full_name}</strong><br /><span>{item.booking_reference}</span><br /><span>{new Date(item.created_at).toLocaleDateString()}</span><small style={{ display: "block", marginTop: 5, opacity: .72 }}>Admin WhatsApp: {item.admin_whatsapp_status || "Unknown"}</small><small style={{ display: "block", opacity: .72 }}>Client WhatsApp: {item.client_whatsapp_status || "Unknown"}</small></td><td><strong>{item.case_category}</strong><br /><span>{item.preferred_date} · {item.preferred_time}</span><br /><span>{isConsultationMethod(item.preferred_contact_method) ? "Consultation method" : "Contact preference"}: {item.preferred_contact_method || "Not specified"}</span><br /><span>{item.message || "No case summary"}</span><details><summary>Internal notes</summary><textarea aria-label={`Internal notes for ${item.full_name}`} defaultValue={item.internal_notes} rows={2} onBlur={(event) => { if (event.target.value !== item.internal_notes) void update({ ...item, internal_notes: event.target.value }); }} /></details></td><td><a href={`tel:${item.phone}`}>{item.phone}</a><br /><a href={`mailto:${item.email}`}>{item.email}</a></td><td><span className={`status-pill ${item.status.toLowerCase()}`}>{item.status}</span><select aria-label={`Change status for ${item.full_name}`} value={item.status} onChange={(event) => void update(item, event.target.value as Consultation["status"])} style={{ display: "block", marginTop: 7, maxWidth: 125, minHeight: 31, fontSize: 10 }}><option>Pending</option><option>Confirmed</option><option>Completed</option><option>Cancelled</option></select></td><td>{item.consultation_documents?.length ? <div className="admin-actions">{item.consultation_documents.map((doc) => <button className="small-action" key={doc.id} onClick={() => void openDocument(doc.id)}><FileText size={12} /> {doc.file_name}</button>)}</div> : <span>No attachment</span>}<div className="admin-actions" style={{ marginTop: 7 }}><button className="small-action" onClick={() => void update(item)}>Save notes</button></div></td></tr>)}</tbody></table></div>;
+  return <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Client / reference</th><th>Matter & appointment</th><th>Contact</th><th>Status</th><th>Files / actions</th></tr></thead><tbody>{items.map((item) => <ConsultationRow key={item.id} item={item} actions={props} />)}</tbody></table></div>;
+}
+
+function ConsultationRow({ item, actions }: { item: Consultation; actions: ConsultationTableProps }) {
+  const [date, setDate] = useState(item.appointment_date || item.preferred_date);
+  const [time, setTime] = useState(item.appointment_time?.slice(0, 5) || "");
+  const [location, setLocation] = useState(item.appointment_location || "");
+  const [notes, setNotes] = useState(item.internal_notes || "");
+  const busy = actions.busyId === item.id;
+  const optedIn = item.whatsapp_opt_in ?? item.preferred_contact_method === "WhatsApp";
+  const draft = { ...item, appointment_date: date, appointment_time: time, appointment_location: location, internal_notes: notes };
+  const retryable = (status?: string) => status === "failed" || status === "not_configured";
+  const notificationLabel = (status?: string) => status === "sent" ? "Accepted by WhatsApp" : status === "not_configured" ? "Account setup required" : status === "not_requested" ? "No WhatsApp consent" : status || "Unknown";
+  return <tr>
+    <td><strong>{item.full_name}</strong><br /><span>{item.booking_reference}</span><br /><span>{new Date(item.created_at).toLocaleDateString()}</span><small className="notification-state">Office alert: {notificationLabel(item.admin_whatsapp_status)}</small><small className="notification-state">Client update: {notificationLabel(item.client_whatsapp_status)}</small></td>
+    <td><strong>{item.case_category}</strong><br /><span>Requested: {item.preferred_date} · {item.preferred_time}</span><br /><span>{isConsultationMethod(item.preferred_contact_method) ? "Consultation method" : "Contact preference"}: {item.preferred_contact_method}</span><br /><span>{item.message || "No case summary"}</span>
+      {item.appointment_date && <p className="fine-print">Appointment: {item.appointment_date} · {item.appointment_time?.slice(0, 5)} PKT{item.appointment_location ? ` · ${item.appointment_location}` : ""}</p>}
+      <details><summary>Confirm / change appointment</summary><form className="appointment-details" onSubmit={(event) => { event.preventDefault(); void actions.update(draft, "Confirmed"); }}>
+        <label>Date<input type="date" required min={todayInPakistan()} value={date} onChange={(event) => setDate(event.target.value)} /></label>
+        <label>Time (Pakistan time)<input type="time" required value={time} onChange={(event) => setTime(event.target.value)} /></label>
+        <label>Meeting location<input maxLength={300} required={item.preferred_contact_method === "Meeting at Another Location"} value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Office address or agreed venue" /></label>
+        <button className="small-action" disabled={busy}>Confirm and notify client</button>
+      </form></details>
+      <details><summary>Internal notes</summary><textarea aria-label={`Internal notes for ${item.full_name}`} value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} maxLength={5000} /><button className="small-action" disabled={busy} onClick={() => void actions.update({ ...item, internal_notes: notes })}>Save notes</button></details>
+    </td>
+    <td><a href={`tel:${item.phone}`}>{item.phone}</a><br /><a href={`mailto:${item.email}`}>{item.email}</a><small className="notification-state">WhatsApp updates: {optedIn ? "Agreed" : "Not selected"}</small></td>
+    <td><span className={`status-pill ${item.status.toLowerCase()}`}>{item.status}</span><select aria-label={`Change status for ${item.full_name}`} value={item.status} disabled={busy} onChange={(event) => void actions.update(event.target.value === "Confirmed" ? draft : item, event.target.value as Consultation["status"])} style={{ display: "block", marginTop: 7, maxWidth: 125, minHeight: 31, fontSize: 10 }}><option>Pending</option><option>Confirmed</option><option>Completed</option><option>Cancelled</option></select></td>
+    <td>{item.consultation_documents?.length ? <div className="admin-actions">{item.consultation_documents.map((doc) => <button className="small-action" key={doc.id} onClick={() => void actions.openDocument(doc.id)}><FileText size={12} /> {doc.file_name}</button>)}</div> : <span>No attachment</span>}
+      <div className="admin-actions notification-actions">
+        {retryable(item.admin_whatsapp_status) && <button className="small-action" disabled={busy} onClick={() => void actions.retry(item, "admin")}>Retry office alert</button>}
+        {optedIn && ["Confirmed", "Cancelled"].includes(item.status) && retryable(item.client_whatsapp_status) && <button className="small-action" disabled={busy} onClick={() => void actions.retry(item, "client")}>Retry client update</button>}
+        {optedIn && <button className="small-action" disabled={busy} onClick={() => void actions.stopUpdates(item)}>Stop WhatsApp updates</button>}
+      </div>
+    </td>
+  </tr>;
 }
 
 function ServiceTable({ services, edit, remove, toggle }: { services: Service[]; edit: (service: Service) => void; remove: (id: string) => void; toggle: (service: Service) => void }) {
