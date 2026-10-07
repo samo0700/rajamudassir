@@ -4,6 +4,7 @@ import { allowSubmission } from "@/lib/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sendAdminEmail } from "@/lib/notify";
 import { sendAdminBookingNotification } from "@/lib/whatsapp";
+import { firm } from "@/lib/firm";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
   const attachment = form.get("attachment");
   if (attachment && attachment instanceof File && attachment.size) {
     const extension = attachment.name.split(".").pop()?.toLowerCase() || "";
-    if (attachment.size > 8 * 1024 * 1024) return Response.json({ error: "The attachment must be smaller than 8 MB." }, { status: 400 });
+    if (attachment.size > 4 * 1024 * 1024) return Response.json({ error: "The attachment must be no larger than 4 MB." }, { status: 400 });
     if (!allowedFiles[attachment.type]?.includes(extension)) return Response.json({ error: "Please attach a PDF, JPG, PNG, DOC, or DOCX file." }, { status: 400 });
     const signature = new Uint8Array(await attachment.slice(0, 8).arrayBuffer());
     const validSignature = attachment.type === "application/pdf" ? String.fromCharCode(...signature.slice(0, 4)) === "%PDF"
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
   }
 
   const id = randomUUID();
-  const bookingReference = `RM-${new Date().getFullYear()}-${randomUUID().slice(0, 6).toUpperCase()}`;
+  const bookingReference = `${firm.monogram}-${new Date().getFullYear()}-${randomUUID().slice(0, 6).toUpperCase()}`;
   const file = attachment instanceof File && attachment.size ? attachment : null;
   let storagePath: string | null = null;
   if (file) {
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const notification = `New consultation request\nReference: ${bookingReference}\nName: ${values.full_name}\nPhone: ${values.phone}\nEmail: ${values.email}\nCategory: ${values.case_category}\nPreferred date: ${values.preferred_date}\nPreferred time: ${values.preferred_time}\nPreferred contact method: ${values.preferred_contact_method}\nCase summary: ${values.message || "No case summary provided."}`;
+  const notification = `${firm.websiteName} (${firm.firmName})\n\nNew consultation request\nReference: ${bookingReference}\nName: ${values.full_name}\nPhone: ${values.phone}\nEmail: ${values.email}\nCategory: ${values.case_category}\nPreferred date: ${values.preferred_date}\nPreferred time: ${values.preferred_time}\nPreferred contact method: ${values.preferred_contact_method}\nCase summary: ${values.message || "No case summary provided."}`;
   const [, whatsappResult] = await Promise.all([
     sendAdminEmail(`Consultation request ${bookingReference}`, notification),
     sendAdminBookingNotification({ ...values, booking_reference: bookingReference })

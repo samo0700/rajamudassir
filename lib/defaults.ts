@@ -1,10 +1,11 @@
 import type { Profile, Service, SiteSettings } from "@/lib/types";
+import { firm } from "@/lib/firm";
 
 export const defaultProfile: Profile = {
   full_name: "Raja Mudassir Advocate",
   professional_title: "Advocate High Court",
   experience_years: 2,
-  bar_council: "SKB",
+  bar_council: "",
   biography: "Profile details are being updated. Please contact the office to confirm further information.",
   profile_image: null,
   email: "mailme.rajamudassir07@gmail.com",
@@ -16,7 +17,7 @@ export const defaultSettings: SiteSettings = {
   phone: "",
   whatsapp: "",
   email: "mailme.rajamudassir07@gmail.com",
-  address: "Near High Court",
+  address: firm.address,
   city: "Lahore",
   office_timings: "Please contact the office to confirm availability.",
   map_url: "",
@@ -24,7 +25,7 @@ export const defaultSettings: SiteSettings = {
   longitude: null,
   logo_url: null,
   social_links: {},
-  footer_text: "Legal representation and consultation in Lahore and across Pakistan."
+  footer_text: "The counsel of SKB, supporting individuals, families, and businesses from our office adjacent to Lahore High Court."
 };
 
 const starterServices: Array<[string, string]> = [

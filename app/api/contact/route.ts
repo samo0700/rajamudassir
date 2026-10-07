@@ -3,6 +3,7 @@ import { allowSubmission } from "@/lib/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sendAdminEmail } from "@/lib/notify";
 import { sendAdminContactNotification } from "@/lib/whatsapp";
+import { firm } from "@/lib/firm";
 
 export async function POST(request: Request) {
   if (!allowSubmission(request, "contact", 5)) return Response.json({ error: "Too many requests. Please try again later." }, { status: 429 });
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     console.error("Contact message insert failed", error.message);
     return Response.json({ error: "Your message could not be saved. Please try again shortly." }, { status: 500 });
   }
-  const notification = `New website inquiry\nName: ${parsed.data.name}\nPhone: ${parsed.data.phone}\nEmail: ${parsed.data.email}\nSubject: ${parsed.data.subject}\nMessage: ${parsed.data.message}`;
+  const notification = `${firm.websiteName} (${firm.firmName})\n\nNew website inquiry\nName: ${parsed.data.name}\nPhone: ${parsed.data.phone}\nEmail: ${parsed.data.email}\nSubject: ${parsed.data.subject}\nMessage: ${parsed.data.message}`;
   const [emailResult, whatsappResult] = await Promise.all([
     sendAdminEmail(`Website inquiry: ${parsed.data.subject}`, notification),
     sendAdminContactNotification(process.env.ADMIN_WHATSAPP || "", notification)

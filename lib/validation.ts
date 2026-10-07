@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { consultationMethods, legacyContactMethods } from "@/lib/consultation-methods";
 
 const publicImageUrl = z.string().trim().url().max(2048).refine((value) => /^https?:\/\//i.test(value), "Use an http or https image URL.");
 
@@ -10,7 +11,7 @@ export const consultationSchema = z.object({
   preferred_date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
   preferred_time: z.enum(["Morning (9 am–12 pm)", "Afternoon (12 pm–4 pm)", "Evening (4 pm–7 pm)", "Flexible"]),
   message: z.string().trim().max(3000).optional().default(""),
-  preferred_contact_method: z.enum(["Phone", "WhatsApp", "Email"]).default("Phone")
+  preferred_contact_method: z.enum([...consultationMethods, ...legacyContactMethods]).default("Office Visit")
 });
 
 export const contactSchema = z.object({

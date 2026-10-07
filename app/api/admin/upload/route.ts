@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   if (!(file instanceof File) || !file.size || !["service", "profile", "logo"].includes(String(kind))) return Response.json({ error: "Choose a valid image to upload." }, { status: 400 });
   const extension = imageTypes[file.type];
   if (!extension || file.name.split(".").pop()?.toLowerCase() !== extension) return Response.json({ error: "Images must be JPG, PNG, or WebP files." }, { status: 400 });
-  if (file.size > 6 * 1024 * 1024) return Response.json({ error: "Images must be smaller than 6 MB." }, { status: 400 });
+  if (file.size > 4 * 1024 * 1024) return Response.json({ error: "Images must be no larger than 4 MB." }, { status: 400 });
   const signature = new Uint8Array(await file.slice(0, 12).arrayBuffer());
   const validSignature = file.type === "image/jpeg" ? signature[0] === 0xff && signature[1] === 0xd8 && signature[2] === 0xff
     : file.type === "image/png" ? signature.slice(0, 8).join(",") === "137,80,78,71,13,10,26,10"

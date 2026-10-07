@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ArrowRight, CheckCircle2, LoaderCircle } from "lucide-react";
+import { firm } from "@/lib/firm";
 
 export function ContactForm() {
   const [state, setState] = useState({ busy: false, error: "", success: false });
@@ -13,7 +14,7 @@ export function ContactForm() {
       form.reset(); setState({ busy: false, error: "", success: true });
     } catch (error) { setState({ busy: false, error: error instanceof Error ? error.message : "Something went wrong.", success: false }); }
   }
-  if (state.success) return <div className="inline-success"><CheckCircle2 size={22} /><div><strong>Message received</strong><p>Thank you. Your message has been sent to the office.</p></div></div>;
+  if (state.success) return <div className="inline-success"><CheckCircle2 size={22} /><div><strong>Message received</strong><p>Thank you. {firm.websiteName} ({firm.firmName}) has received your message. Our office will respond using the contact details you provided.</p></div></div>;
   return <form className="contact-form" onSubmit={submit}>
     {state.error && <div className="form-alert" role="alert">{state.error}</div>}
     <div className="form-grid">

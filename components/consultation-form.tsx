@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { ArrowRight, CheckCircle2, FileText, LoaderCircle } from "lucide-react";
 import type { Service } from "@/lib/types";
+import { firm } from "@/lib/firm";
+import { consultationMethods } from "@/lib/consultation-methods";
 
 export function ConsultationForm({ services, selectedCategory = "" }: { services: Service[]; selectedCategory?: string }) {
   const [state, setState] = useState<{ busy: boolean; error: string; reference: string }>({ busy: false, error: "", reference: "" });
@@ -11,7 +13,7 @@ export function ConsultationForm({ services, selectedCategory = "" }: { services
     setState({ busy: true, error: "", reference: "" });
     const form = event.currentTarget;
     const file = (form.elements.namedItem("attachment") as HTMLInputElement).files?.[0];
-    if (file && file.size > 8 * 1024 * 1024) { setState({ busy: false, error: "Please choose a file smaller than 8 MB.", reference: "" }); return; }
+    if (file && file.size > 4 * 1024 * 1024) { setState({ busy: false, error: "Please choose a file no larger than 4 MB.", reference: "" }); return; }
     try {
       const response = await fetch("/api/consultations", { method: "POST", body: new FormData(form) });
       const result = await response.json();
@@ -20,9 +22,9 @@ export function ConsultationForm({ services, selectedCategory = "" }: { services
       form.reset();
     } catch (error) { setState({ busy: false, error: error instanceof Error ? error.message : "Something went wrong. Please try again.", reference: "" }); }
   }
-  if (state.reference) return <div className="form-success"><span className="success-icon"><CheckCircle2 size={28} /></span><span className="eyebrow">Request received</span><h2>Thank you for reaching out.</h2><p>Your consultation request has been received and is pending review. Keep this reference for your records.</p><strong className="booking-reference">{state.reference}</strong><p className="fine-print">Submitting a request does not establish an advocate-client relationship. The office will contact you to confirm availability.</p></div>;
+  if (state.reference) return <div className="form-success"><span className="success-icon"><CheckCircle2 size={28} /></span><span className="eyebrow">Request received</span><h2>Thank you for reaching out.</h2><p>{firm.websiteName} ({firm.firmName}) has received your consultation request. Our office will review it. Keep this reference for your records.</p><strong className="booking-reference">{state.reference}</strong><p className="fine-print">Submitting a request does not establish an advocate-client relationship. Our office will contact you to confirm availability with the relevant counsel.</p></div>;
   return <form className="form-card consultation-form" onSubmit={submit}>
-    <div className="form-intro"><span className="eyebrow">Consultation request</span><h2>Tell us a little about your matter.</h2><p>Share your preferred time and a brief summary. The office will follow up to confirm availability.</p></div>
+    <div className="form-intro"><span className="eyebrow">Consultation request</span><h2>Tell us a little about your matter.</h2><p>Share your preferred time and a brief summary. Our office at {firm.websiteName} will follow up to confirm availability with the relevant counsel.</p></div>
     {state.error && <div className="form-alert" role="alert">{state.error}</div>}
     <div className="form-grid">
       <label>Full name <input name="full_name" required minLength={2} maxLength={120} autoComplete="name" placeholder="Your full name" /></label>
@@ -31,12 +33,12 @@ export function ConsultationForm({ services, selectedCategory = "" }: { services
       <label>Case category <select name="case_category" required defaultValue={selectedCategory}><option value="" disabled>Select a service</option>{services.map((service) => <option key={service.id} value={service.title}>{service.title}</option>)}<option value="Not sure yet">Not sure yet</option></select></label>
       <label>Preferred date <input name="preferred_date" type="date" required min={new Date().toISOString().slice(0, 10)} /></label>
       <label>Preferred time <select name="preferred_time" required defaultValue=""><option value="" disabled>Select a time range</option><option>Morning (9 am–12 pm)</option><option>Afternoon (12 pm–4 pm)</option><option>Evening (4 pm–7 pm)</option><option>Flexible</option></select></label>
-      <label>Preferred contact method <select name="preferred_contact_method" defaultValue="Phone"><option>Phone</option><option>WhatsApp</option><option>Email</option></select><small style={{ fontWeight: 400, letterSpacing: 0, lineHeight: 1.5 }}>Choosing WhatsApp opts you in to receive consultation booking updates from Raja Mudassir Advocate at the phone number above.</small></label>
-      <label className="file-field">Attach a document <span className="file-input-wrap"><FileText size={17} /><input name="attachment" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /><small>PDF, JPG, PNG, DOC or DOCX · up to 8 MB</small></span></label>
+      <label>Preferred contact method <select name="preferred_contact_method" defaultValue="Office Visit" aria-describedby="consultation-method-help">{consultationMethods.map((method) => <option key={method}>{method}</option>)}</select><small id="consultation-method-help" style={{ fontWeight: 400, letterSpacing: 0, lineHeight: 1.5 }}>Our office will contact you to confirm your appointment. For a meeting at another location, suggest an area in your case summary; the office will confirm the venue and availability.</small></label>
+      <label className="file-field">Attach a document <span className="file-input-wrap"><FileText size={17} /><input name="attachment" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /><small>PDF, JPG, PNG, DOC or DOCX · up to 4 MB</small></span></label>
       <label className="field-full">Short case summary <textarea name="message" rows={5} maxLength={3000} placeholder="Briefly describe what you would like to discuss…" /></label>
       <div className="trap-field" aria-hidden="true"><label>Leave this field empty<input name="website" tabIndex={-1} autoComplete="off" /></label></div>
     </div>
     <p className="fine-print">Please do not send highly sensitive information until the office has confirmed a secure way to share it.</p>
-    <button className="button button-primary form-submit" disabled={state.busy}>{state.busy ? <><LoaderCircle size={17} className="spin" /> Sending request</> : <>Send consultation request <ArrowRight size={17} /></>}</button>
+    <button className="button button-primary form-submit" disabled={state.busy}>{state.busy ? <><LoaderCircle size={17} className="spin" /> Sending request</> : <>Request consultation <ArrowRight size={17} /></>}</button>
   </form>;
 }

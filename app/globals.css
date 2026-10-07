@@ -393,3 +393,48 @@ body:has(.admin-mode) > .help-widget { display: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Firm photography, counsel profiles, and practice contacts. */
+.brand-logo { width: 54px; height: 54px; }
+.hero-team-photo { position: relative; margin: 0; padding: 12px; border: 1px solid rgba(184,154,90,.5); background: rgba(255,255,255,.025); }
+.hero-team-photo img { display: block; width: 100%; height: auto; object-fit: contain; }
+.hero-team-photo figcaption { display: flex; justify-content: space-between; gap: 12px; padding: 13px 3px 2px; color: var(--gold-light); font-size: 10px; letter-spacing: .08em; }
+.hero-meta { flex-wrap: wrap; }
+.counsel-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; margin-top: 30px; }
+.counsel-card { min-width: 0; padding: 25px; border: 1px solid var(--line); background: var(--white); }
+.counsel-role { color: #947b47; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.counsel-card h3 { margin: 12px 0 6px; font-family: var(--serif); font-size: 25px; line-height: 1.25; font-weight: 400; }
+.counsel-practice { margin: 0 0 22px; color: #696a63; font-size: 13px; }
+.counsel-card .text-link { font-size: 11px; }
+.counsel-phone { display: flex; gap: 7px; align-items: center; margin-top: 15px; color: #887346; font-size: 11px; }
+.firm-about-grid { display: grid; grid-template-columns: 1.1fr .9fr; align-items: start; gap: 5vw; }
+.firm-team-photo { margin: 0; padding: 10px; border: 1px solid var(--line); background: var(--white); }
+.firm-team-photo img { display: block; width: 100%; height: auto; }
+.firm-team-photo figcaption { padding: 13px 3px 3px; color: #777870; font-size: 11px; }
+.service-card-title { margin-bottom: 0; font-weight: 400; }
+.service-card-title a:hover { color: #887346; }
+.service-card-copy { margin-bottom: 0; }
+.counsel-contact { display: flex; flex-direction: column; gap: 5px; margin: 18px 0; padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.counsel-contact-compact { margin: 17px 0 0; padding: 14px 0 0; border-bottom: 0; }
+.counsel-contact-label { color: #887346; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.counsel-contact-name { color: var(--ink); font-family: var(--serif); font-size: 17px; line-height: 1.35; }
+.counsel-contact-designation { color: #74756d; font-size: 11px; }
+.counsel-office-phone { display: inline-flex; align-items: center; gap: 7px; margin-top: 7px; color: #887346; font-size: 11px; line-height: 1.5; }
+.counsel-office-phone:hover { text-decoration: underline; }
+@media (max-width: 980px) { .counsel-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 700px) {
+  .brand-logo { width: 44px; height: 44px; }
+  .hero-team-photo { padding: 8px; }
+  .hero-team-photo figcaption { font-size: 9px; letter-spacing: .02em; }
+  .firm-about-grid { grid-template-columns: 1fr; gap: 28px; }
+  .counsel-card { padding: 20px; }
+  .counsel-card h3 { font-size: 22px; }
+  .counsel-grid { grid-template-columns: 1fr; gap: 12px; }
+}
+@media (max-width: 420px) {
+  .service-grid, .services-page-grid { grid-template-columns: 1fr; }
+  .hero-actions .button { width: 100%; }
+  .brand { gap: 8px; }
+  .brand strong { font-size: 14px; }
+  .brand small { font-size: 8px; letter-spacing: .08em; }
+}

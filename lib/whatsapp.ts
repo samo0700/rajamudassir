@@ -1,4 +1,5 @@
 import "server-only";
+import { firm } from "@/lib/firm";
 
 export type WhatsAppNotificationStatus = "sent" | "failed" | "not_configured";
 export type WhatsAppNotificationResult = { status: WhatsAppNotificationStatus };
@@ -171,7 +172,7 @@ export function sendClientConfirmation(booking: ClientNotice): Promise<WhatsAppN
     "Confirmed",
     booking.preferred_date,
     booking.preferred_time,
-    "Raja Mudassir Advocate"
+    `${firm.websiteName} (${firm.firmName})`
   ]);
 }
 
@@ -181,7 +182,7 @@ export function sendClientCancellation(booking: ClientNotice): Promise<WhatsAppN
     "Cancelled",
     booking.preferred_date,
     booking.preferred_time,
-    "Raja Mudassir Advocate"
+    `${firm.websiteName} (${firm.firmName})`
   ]);
 }
 
