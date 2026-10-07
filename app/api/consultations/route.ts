@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sendAdminEmail } from "@/lib/notify";
 import { sendAdminBookingNotification } from "@/lib/whatsapp";
 import { firm } from "@/lib/firm";
+import { todayInPakistan } from "@/lib/consultation-date";
 
 export const runtime = "nodejs";
 
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
   const values = parsed.data;
   const preferredDate = new Date(`${values.preferred_date}T00:00:00`);
   if (Number.isNaN(preferredDate.getTime()) || !/^\d{4}-\d{2}-\d{2}$/.test(values.preferred_date)) return Response.json({ error: "Please choose a valid preferred date." }, { status: 400 });
-  if (values.preferred_date < new Date().toISOString().slice(0, 10)) return Response.json({ error: "Preferred date cannot be in the past." }, { status: 400 });
+  if (values.preferred_date < todayInPakistan()) return Response.json({ error: "Preferred date cannot be in the past." }, { status: 400 });
 
   const attachment = form.get("attachment");
   if (attachment && attachment instanceof File && attachment.size) {
@@ -63,6 +64,8 @@ export async function POST(request: Request) {
     id,
     booking_reference: bookingReference,
     ...values,
+    whatsapp_opt_in: values.whatsapp_opt_in ?? values.preferred_contact_method === "WhatsApp",
+    whatsapp_opt_in_at: (values.whatsapp_opt_in ?? values.preferred_contact_method === "WhatsApp") ? new Date().toISOString() : null,
     status: "Pending",
     internal_notes: ""
   });
