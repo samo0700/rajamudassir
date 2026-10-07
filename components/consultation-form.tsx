@@ -5,6 +5,7 @@ import { ArrowRight, CheckCircle2, FileText, LoaderCircle } from "lucide-react";
 import type { Service } from "@/lib/types";
 import { firm } from "@/lib/firm";
 import { consultationMethods } from "@/lib/consultation-methods";
+import { todayInPakistan } from "@/lib/consultation-date";
 
 export function ConsultationForm({ services, selectedCategory = "" }: { services: Service[]; selectedCategory?: string }) {
   const [state, setState] = useState<{ busy: boolean; error: string; reference: string }>({ busy: false, error: "", reference: "" });
@@ -31,11 +32,12 @@ export function ConsultationForm({ services, selectedCategory = "" }: { services
       <label>Phone number <input name="phone" required minLength={7} maxLength={32} autoComplete="tel" placeholder="+92 3XX XXXXXXX" /></label>
       <label>Email address <input name="email" type="email" required maxLength={254} autoComplete="email" placeholder="you@example.com" /></label>
       <label>Case category <select name="case_category" required defaultValue={selectedCategory}><option value="" disabled>Select a service</option>{services.map((service) => <option key={service.id} value={service.title}>{service.title}</option>)}<option value="Not sure yet">Not sure yet</option></select></label>
-      <label>Preferred date <input name="preferred_date" type="date" required min={new Date().toISOString().slice(0, 10)} /></label>
+      <label>Preferred date <input name="preferred_date" type="date" required min={todayInPakistan()} /></label>
       <label>Preferred time <select name="preferred_time" required defaultValue=""><option value="" disabled>Select a time range</option><option>Morning (9 am–12 pm)</option><option>Afternoon (12 pm–4 pm)</option><option>Evening (4 pm–7 pm)</option><option>Flexible</option></select></label>
       <label>Preferred contact method <select name="preferred_contact_method" defaultValue="Office Visit" aria-describedby="consultation-method-help">{consultationMethods.map((method) => <option key={method}>{method}</option>)}</select><small id="consultation-method-help" style={{ fontWeight: 400, letterSpacing: 0, lineHeight: 1.5 }}>Our office will contact you to confirm your appointment. For a meeting at another location, suggest an area in your case summary; the office will confirm the venue and availability.</small></label>
       <label className="file-field">Attach a document <span className="file-input-wrap"><FileText size={17} /><input name="attachment" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /><small>PDF, JPG, PNG, DOC or DOCX · up to 4 MB</small></span></label>
       <label className="field-full">Short case summary <textarea name="message" rows={5} maxLength={3000} placeholder="Briefly describe what you would like to discuss…" /></label>
+      <label className="field-full whatsapp-consent"><input name="whatsapp_opt_in" type="checkbox" /><span>I agree to receive appointment confirmations and updates from {firm.websiteName} (SKB) on WhatsApp at the phone number above.<small>You can book without selecting this option. Ask our office to stop updates at any time.</small></span></label>
       <div className="trap-field" aria-hidden="true"><label>Leave this field empty<input name="website" tabIndex={-1} autoComplete="off" /></label></div>
     </div>
     <p className="fine-print">Please do not send highly sensitive information until the office has confirmed a secure way to share it.</p>
