@@ -10,7 +10,7 @@ import type { Consultation, ContactMessage, Profile, Service, SiteSettings } fro
 import { firm } from "@/lib/firm";
 import { isConsultationMethod } from "@/lib/consultation-methods";
 import { consultationMethods } from "@/lib/consultation-methods";
-import { todayInPakistan } from "@/lib/consultation-date";
+import { isValidConsultationDate, todayInPakistan } from "@/lib/consultation-date";
 
 type Tab = "Overview" | "Consultations" | "Services" | "Counsel profile" | "Office & settings" | "Messages";
 type DataState = { profile: Profile; settings: SiteSettings; services: Service[]; consultations: Consultation[]; messages: ContactMessage[] };
@@ -147,7 +147,11 @@ export function AdminDashboard() {
       });
       notificationNotice(result, `${status || "Appointment details"} saved`);
       await loadData();
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not update appointment."); }
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Could not update appointment.";
+      setError(message);
+      return message;
+    }
     finally { setConsultationBusy(""); }
   }
 
@@ -263,7 +267,7 @@ function slugify(value: string) { return value.toLowerCase().normalize("NFKD").r
 
 type ConsultationTableProps = {
   items: Consultation[];
-  update: (item: Consultation, status?: Consultation["status"]) => Promise<void>;
+  update: (item: Consultation, status?: Consultation["status"]) => Promise<string | undefined>;
   openDocument: (id: string) => Promise<void>;
   retry: (item: Consultation, recipient: "admin" | "client") => Promise<void>;
   stopUpdates: (item: Consultation) => Promise<void>;
@@ -281,16 +285,34 @@ function ConsultationRow({ item, actions }: { item: Consultation; actions: Consu
   const [time, setTime] = useState(item.appointment_time?.slice(0, 5) || "");
   const [location, setLocation] = useState(item.appointment_location || "");
   const [notes, setNotes] = useState(item.internal_notes || "");
+  const [appointmentOpen, setAppointmentOpen] = useState(false);
+  const [appointmentError, setAppointmentError] = useState("");
   const busy = actions.busyId === item.id;
   const optedIn = item.whatsapp_opt_in ?? item.preferred_contact_method === "WhatsApp";
   const draft = { ...item, appointment_date: date, appointment_time: time, appointment_location: location, internal_notes: notes };
   const retryable = (status?: string) => status === "failed" || status === "not_configured";
-  const notificationLabel = (status?: string) => status === "sent" ? "Accepted by WhatsApp" : status === "not_configured" ? "Account setup required" : status === "not_requested" ? "No WhatsApp consent" : status || "Unknown";
+  const notificationLabel = (status?: string) => status === "sent" ? "Accepted by WhatsApp" : status === "not_configured" ? "Account setup required" : status || "Unknown";
+  const clientNotificationLabel = item.client_whatsapp_status === "not_requested"
+    ? !optedIn ? "No WhatsApp consent" : item.status === "Pending" ? "Awaiting appointment confirmation" : "No update requested"
+    : notificationLabel(item.client_whatsapp_status);
+
+  async function confirmAppointment() {
+    const missing = [!date && "date", !time && "exact time (Pakistan time)", item.preferred_contact_method === "Meeting at Another Location" && !location.trim() && "agreed meeting location"].filter(Boolean);
+    const message = missing.length ? `Choose the ${missing.join(" and ")} below before confirming.`
+      : !isValidConsultationDate(date) || date < todayInPakistan() ? "Choose a valid appointment date that is today or later."
+      : !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time) ? "Choose an exact appointment time in Pakistan time."
+      : "";
+    setAppointmentError(message);
+    if (message) { setAppointmentOpen(true); return; }
+    const saveError = await actions.update(draft, "Confirmed");
+    if (saveError) { setAppointmentError(saveError); setAppointmentOpen(true); }
+  }
   return <tr>
-    <td><strong>{item.full_name}</strong><br /><span>{item.booking_reference}</span><br /><span>{new Date(item.created_at).toLocaleDateString()}</span><small className="notification-state">Office alert: {notificationLabel(item.admin_whatsapp_status)}</small><small className="notification-state">Client update: {notificationLabel(item.client_whatsapp_status)}</small></td>
+    <td><strong>{item.full_name}</strong><br /><span>{item.booking_reference}</span><br /><span>{new Date(item.created_at).toLocaleDateString()}</span><small className="notification-state">Office alert: {notificationLabel(item.admin_whatsapp_status)}</small><small className="notification-state">Client update: {clientNotificationLabel}</small></td>
     <td><strong>{item.case_category}</strong><br /><span>Requested: {item.preferred_date} · {item.preferred_time}</span><br /><span>{isConsultationMethod(item.preferred_contact_method) ? "Consultation method" : "Contact preference"}: {item.preferred_contact_method}</span><br /><span>{item.message || "No case summary"}</span>
       {item.appointment_date && <p className="fine-print">Appointment: {item.appointment_date} · {item.appointment_time?.slice(0, 5)} PKT{item.appointment_location ? ` · ${item.appointment_location}` : ""}</p>}
-      <details><summary>Confirm / change appointment</summary><form className="appointment-details" onSubmit={(event) => { event.preventDefault(); void actions.update(draft, "Confirmed"); }}>
+      <details open={appointmentOpen} onToggle={(event) => setAppointmentOpen(event.currentTarget.open)}><summary>Confirm / change appointment</summary><form className="appointment-details" noValidate onSubmit={(event) => { event.preventDefault(); void confirmAppointment(); }}>
+        {appointmentError && <p className="form-alert" role="alert">{appointmentError}</p>}
         <label>Date<input type="date" required min={todayInPakistan()} value={date} onChange={(event) => setDate(event.target.value)} /></label>
         <label>Time (Pakistan time)<input type="time" required value={time} onChange={(event) => setTime(event.target.value)} /></label>
         <label>Meeting location<input maxLength={300} required={item.preferred_contact_method === "Meeting at Another Location"} value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Office address or agreed venue" /></label>
@@ -299,7 +321,7 @@ function ConsultationRow({ item, actions }: { item: Consultation; actions: Consu
       <details><summary>Internal notes</summary><textarea aria-label={`Internal notes for ${item.full_name}`} value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} maxLength={5000} /><button className="small-action" disabled={busy} onClick={() => void actions.update({ ...item, internal_notes: notes })}>Save notes</button></details>
     </td>
     <td><a href={`tel:${item.phone}`}>{item.phone}</a><br /><a href={`mailto:${item.email}`}>{item.email}</a><small className="notification-state">WhatsApp updates: {optedIn ? "Agreed" : "Not selected"}</small></td>
-    <td><span className={`status-pill ${item.status.toLowerCase()}`}>{item.status}</span><select aria-label={`Change status for ${item.full_name}`} value={item.status} disabled={busy} onChange={(event) => void actions.update(event.target.value === "Confirmed" ? draft : item, event.target.value as Consultation["status"])} style={{ display: "block", marginTop: 7, maxWidth: 125, minHeight: 31, fontSize: 10 }}><option>Pending</option><option>Confirmed</option><option>Completed</option><option>Cancelled</option></select></td>
+    <td><span className={`status-pill ${item.status.toLowerCase()}`}>{item.status}</span><select aria-label={`Change status for ${item.full_name}`} value={item.status} disabled={busy} onChange={(event) => { if (event.target.value === "Confirmed") void confirmAppointment(); else { setAppointmentError(""); void actions.update(item, event.target.value as Consultation["status"]); } }} style={{ display: "block", marginTop: 7, maxWidth: 125, minHeight: 31, fontSize: 10 }}><option>Pending</option><option>Confirmed</option><option>Completed</option><option>Cancelled</option></select></td>
     <td>{item.consultation_documents?.length ? <div className="admin-actions">{item.consultation_documents.map((doc) => <button className="small-action" key={doc.id} onClick={() => void actions.openDocument(doc.id)}><FileText size={12} /> {doc.file_name}</button>)}</div> : <span>No attachment</span>}
       <div className="admin-actions notification-actions">
         {retryable(item.admin_whatsapp_status) && <button className="small-action" disabled={busy} onClick={() => void actions.retry(item, "admin")}>Retry office alert</button>}
